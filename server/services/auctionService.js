@@ -1,4 +1,5 @@
 import Auction from '../models/Auction.js';
+import { notifyBidPlaced } from './emailService.js';
 
 export class BidError extends Error {
   constructor(message, status = 400, latestAuction = null) {
@@ -15,6 +16,7 @@ export function presentAuction(doc) {
     ...auction,
     _id: String(auction._id),
     createdBy: auction.createdBy?._id ? { _id: String(auction.createdBy._id), username: auction.createdBy.username } : auction.createdBy,
+    highestBidder: auction.highestBidder?._id ? String(auction.highestBidder._id) : auction.highestBidder,
     bids: (auction.bids || []).map((bid) => ({
       ...bid,
       _id: String(bid._id),
@@ -27,8 +29,14 @@ export async function placeBid({ auctionId, user, amount }) {
   const numericAmount = Number(amount);
   if (!Number.isSafeInteger(numericAmount) || numericAmount <= 0) throw new BidError('Enter a valid whole-rupee bid amount.');
 
-  const auction = await Auction.findById(auctionId);
+  const auction = await Auction.findById(auctionId)
+    .populate('createdBy', 'username email role')
+    .populate('highestBidder', 'username email role');
   if (!auction) throw new BidError('Auction not found.', 404);
+  if (!['buyer', 'bidder', 'admin'].includes(user.role)) throw new BidError('Seller accounts cannot place bids. Sign in with a buyer or bidder account.', 403);
+  if (auction.createdBy && String(auction.createdBy._id || auction.createdBy) === String(user._id)) {
+    throw new BidError('You cannot bid on your own auction.', 403);
+  }
   if (auction.status !== 'active' || auction.endsAt <= new Date()) throw new BidError('This auction has ended.', 409, presentAuction(auction));
   const minimum = auction.currentPrice + auction.minIncrement;
   if (numericAmount < minimum) {
@@ -49,6 +57,18 @@ export async function placeBid({ auctionId, user, amount }) {
     const latest = await Auction.findById(auction._id);
     throw new BidError('A newer bid arrived first. Check the current price and try again.', 409, presentAuction(latest));
   }
+
+  await notifyBidPlaced({
+    auctionId: updated._id,
+    title: updated.title,
+    amount: numericAmount,
+    bidId: updated.bids.at(-1)?._id || `${updated._id}:${Date.now()}`,
+    buyer: user,
+    seller: auction.createdBy,
+    outbidBuyer: auction.highestBidder && String(auction.highestBidder._id || auction.highestBidder) !== String(user._id)
+      ? auction.highestBidder
+      : null,
+  });
 
   return presentAuction(updated);
 }

@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer } from 'react';
-import { api } from '../lib/api';
+import { io } from 'socket.io-client';
+import { api, socketOrigin } from '../lib/api';
 
 const AuctionContext = createContext(null);
 const initialState = { auctions: [], loading: true, error: '' };
@@ -7,7 +8,14 @@ const initialState = { auctions: [], loading: true, error: '' };
 function reducer(state, action) {
   switch (action.type) {
     case 'LOAD': return { ...state, loading: true, error: '' };
-    case 'LOADED': return { auctions: action.auctions, loading: false, error: '' };
+    case 'LOADED': {
+      const auctions = [...action.auctions];
+      const loadedIds = new Set(auctions.map((auction) => auction._id));
+      for (const auction of state.auctions) {
+        if (!loadedIds.has(auction._id)) auctions.unshift(auction);
+      }
+      return { auctions, loading: false, error: '' };
+    }
     case 'ERROR': return { ...state, loading: false, error: action.error };
     case 'UPSERT': {
       const exists = state.auctions.some((auction) => auction._id === action.auction._id);
@@ -34,6 +42,17 @@ export function AuctionProvider({ children }) {
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  useEffect(() => {
+    const socket = io(socketOrigin(), { reconnectionAttempts: 8, timeout: 8000 });
+    const handleAuctionCreated = (auction) => dispatch({ type: 'UPSERT', auction });
+    socket.on('auction:created', handleAuctionCreated);
+    return () => {
+      socket.off('auction:created', handleAuctionCreated);
+      socket.disconnect();
+    };
+  }, []);
+
   const updateAuction = useCallback((auction) => { if (auction?._id) dispatch({ type: 'UPSERT', auction }); }, []);
   const value = useMemo(() => ({ ...state, refresh, updateAuction }), [state, refresh, updateAuction]);
   return <AuctionContext.Provider value={value}>{children}</AuctionContext.Provider>;

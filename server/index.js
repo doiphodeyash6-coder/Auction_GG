@@ -17,6 +17,7 @@ import authRoutes from './routes/auth.js';
 import auctionRoutes from './routes/auctions.js';
 import { asyncHandler } from './middleware/asyncHandler.js';
 import { BidError, placeBid, presentAuction, publishAuction } from './services/auctionService.js';
+import { notifyAuctionClosed } from './services/emailService.js';
 import { seedData } from './seed.js';
 
 const app = express();
@@ -129,12 +130,22 @@ io.on('connection', (socket) => {
 });
 
 async function endExpiredAuctions() {
-  const expired = await Auction.find({ status: 'active', endsAt: { $lte: new Date() } });
-  if (!expired.length) return;
-  await Auction.updateMany({ _id: { $in: expired.map((item) => item._id) } }, { $set: { status: 'ended' } });
-  for (const item of expired) {
-    item.status = 'ended';
+  const candidates = await Auction.find({ status: 'active', endsAt: { $lte: new Date() } }).select('_id').lean();
+  for (const candidate of candidates) {
+    const item = await Auction.findOneAndUpdate(
+      { _id: candidate._id, status: 'active', endsAt: { $lte: new Date() } },
+      { $set: { status: 'ended' } },
+      { new: true },
+    ).populate('createdBy', 'username email role').populate('highestBidder', 'username email role');
+    if (!item) continue;
     publishAuction(io, presentAuction(item));
+    await notifyAuctionClosed({
+      auctionId: item._id,
+      title: item.title,
+      seller: item.createdBy,
+      buyer: item.highestBidder,
+      finalPrice: item.currentPrice,
+    });
   }
 }
 

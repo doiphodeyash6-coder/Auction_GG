@@ -1,16 +1,24 @@
 services:
   app:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
     ports:
-      - "4000:4000"
-    env_file:
-      - .env
+      - "${APP_PORT:-4000}:4000"
     environment:
       NODE_ENV: production
       PORT: 4000
       MONGODB_URI: mongodb://mongo:27017/gavel_grain
-      CLIENT_URL: http://localhost:4000
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env before starting Docker Compose}
+      CLIENT_URL: ${CLIENT_URL:-http://localhost:4000}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
     depends_on:
       mongo:
         condition: service_healthy
@@ -18,13 +26,15 @@ services:
   mongo:
     image: mongo:7
     restart: unless-stopped
+    init: true
     volumes:
       - auction-data:/data/db
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ ping: 1 }).ok || quit(1)"]
       interval: 5s
       timeout: 3s
       retries: 12
+      start_period: 10s
 
 volumes:
   auction-data:
