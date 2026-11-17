@@ -10,7 +10,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: CLIENT_URL
-        value: https://gavel-grain.onrender.com
+        value: "https://auction-gg.vercel.app,https://gavel-grain.onrender.com"
       - key: MONGODB_URI
         sync: false
       - key: JWT_SECRET

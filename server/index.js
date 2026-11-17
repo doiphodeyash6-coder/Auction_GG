@@ -24,8 +24,15 @@ const app = express();
 const server = http.createServer(app);
 const port = Number(process.env.PORT || 4000);
 app.set('trust proxy', 1);
-const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173,http://localhost:4000')
+const defaultOrigins = process.env.NODE_ENV === 'production'
+  ? 'https://auction-gg.vercel.app,https://gavel-grain.onrender.com'
+  : 'http://localhost:5173,http://localhost:4000';
+const configuredOrigins = (process.env.CLIENT_URL || defaultOrigins)
   .split(',').map((origin) => origin.trim()).filter(Boolean);
+const allowedOrigins = [...new Set([
+  ...configuredOrigins,
+  ...(process.env.NODE_ENV === 'production' ? ['https://auction-gg.vercel.app'] : []),
+])];
 
 if (process.env.NODE_ENV === 'production' && (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32)) {
   throw new Error('Set JWT_SECRET to a random value of at least 32 characters in production.');

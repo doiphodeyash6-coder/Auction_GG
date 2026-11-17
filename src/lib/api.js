@@ -1,4 +1,5 @@
-const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+const DEFAULT_PRODUCTION_API = 'https://gavel-grain.onrender.com';
+const API_BASE = (import.meta.env.VITE_API_URL || (import.meta.env.PROD ? DEFAULT_PRODUCTION_API : '')).replace(/\/$/, '');
 
 export async function api(path, { token, ...options } = {}) {
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };

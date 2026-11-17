@@ -108,7 +108,7 @@ To deploy manually from a local Docker build, run `docker build -t gavel-grain:l
 
 ### Vercel frontend + Render API
 
-Vercel can host the Vite frontend separately using `vercel.json`. Set `VITE_API_URL` and `VITE_SOCKET_URL` to the Render API origin in Vercel’s project environment. Add the Vercel site origin to `CLIENT_URL` on the API, comma-separated if more than one frontend origin is used. The same Render API still connects to MongoDB and hosts Socket.IO.
+Vercel can host the Vite frontend separately using `vercel.json`. The non-secret `.env.production` file points the frontend to `https://gavel-grain.onrender.com` for API and Socket.IO requests. Vercel project environment variables `VITE_API_URL` and `VITE_SOCKET_URL` can override these public origins. The Render API must be deployed and connected to MongoDB. The allowed production origins include `https://auction-gg.vercel.app` and the Render service origin, so the browser can call the API and join auction rooms.
 
 ## Environment variables
 
